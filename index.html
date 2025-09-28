@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BEL AOI Autonomous Verification</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .page { display: none; }
+        .active-page { display: block; }
+        .custom-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Custom Modal for Messages/Alerts -->
+<div id="custom-modal" class="custom-modal hidden">
+    <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full">
+        <h3 id="modal-title" class="text-lg font-bold mb-3">Message</h3>
+        <p id="modal-message" class="text-gray-700 mb-4"></p>
+        <button onclick="document.getElementById('custom-modal').classList.add('hidden')" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-semibold">Close</button>
+    </div>
+</div>
+
+<div id="app" class="p-4 md:p-8 max-w-5xl mx-auto w-full">
+    <header class="text-center mb-6">
+        <h1 class="text-3xl font-extrabold text-blue-800">BEL AOI Autonomous QC System</h1>
+        <p class="text-gray-600 mt-1">Image Recognition, Rule Lookup, and Verification</p>
+    </header>
+
+    <!-- Navigation Bar -->
+    <nav class="mb-8 bg-white p-3 rounded-xl shadow-lg flex flex-wrap justify-center gap-2 border border-blue-100">
+        <button data-page="ic-rules" class="nav-btn bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-700 transition duration-150">1. Master IC Rules (PN/OEM)</button>
+        <button data-page="pcb-mapping" class="nav-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-200 transition duration-150">2. PCB Slot Mappings</button>
+        <button data-page="ic-check" class="nav-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-200 transition duration-150">3. Autonomous Verification</button>
+        <button data-page="verified-ic" class="nav-btn bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-blue-200 transition duration-150">4. Verification History</button>
+    </nav>
+    <p id="user-id-display" class="text-xs text-center mb-4 text-gray-400"></p>
+
+    <!-- ---------------------------------------------------- -->
+    <!-- PAGE 1: MASTER IC RULES (PN/RegEx Definition & View) -->
+    <!-- ---------------------------------------------------- -->
+    <div id="ic-rules" class="page active-page bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-blue-100">
+        <h2 class="text-2xl font-bold text-blue-700 mb-4">1. Master IC Rule Definition & Dataset (SHARED)</h2>
+        <p class="text-gray-600 mb-6 font-bold text-sm">Rules added here are INSTANTLY available to ALL users for verification. (Only PN and OEM are checked).</p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <div>
+                <label for="masterPartNumber" class="block text-sm font-medium text-gray-700 mb-1">Part Number (e.g., LM324N)</label>
+                <input type="text" id="masterPartNumber" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500" placeholder="PN">
+            </div>
+            <div>
+                <label for="masterOEM" class="block text-sm font-medium text-gray-700 mb-1">OEM (e.g., TI)</label>
+                <input type="text" id="masterOEM" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500" placeholder="Manufacturer">
+            </div>
+            <!-- Lot Code RegEx Input Removed -->
+            <input type="hidden" id="masterRegEx" value="" />
+        </div>
+        <button id="saveMasterData" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition duration-300 shadow-md shadow-blue-500/50">
+            Save New Approved IC Rule
+        </button>
+
+        <h3 class="text-xl font-semibold text-red-700 mt-8 mb-4">Available IC Dataset (Rules)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="full-master-data-view">
+            <p class="text-gray-500 col-span-full" id="empty-master-data-view">Loading master data...</p>
+        </div>
+    </div>
+
+
+    <!-- ---------------------------------------------------- -->
+    <!-- PAGE 2: PCB SLOT MAPPINGS (BOM Context Definition) -->
+    <!-- ---------------------------------------------------- -->
+    <div id="pcb-mapping" class="page bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-purple-100">
+        <h2 class="text-2xl font-bold text-purple-700 mb-4">2. PCB Slot Mappings (SHARED)</h2>
+        <p class="text-gray-600 mb-6 font-bold text-sm">Mappings added here define the BOM context for ALL users.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <div>
+                <label for="pcbModel" class="block text-sm font-medium text-gray-700 mb-1">PCB Model Name (e.g., Relay_Card_V1)</label>
+                <input type="text" id="pcbModel" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="PCB-XYZ">
+            </div>
+            <div>
+                <label for="icSlotId" class="block text-sm font-medium text-gray-700 mb-1">IC Slot ID (e.g., U1, U10)</label>
+                <input type="text" id="icSlotId" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="U1">
+            </div>
+            <div>
+                <label for="mappedPartNumber" class="block text-sm font-medium text-gray-700 mb-1">Maps To Approved Part Number</label>
+                <select id="mappedPartNumber" class="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-700">
+                    <option value="">-- Select Approved PN --</option>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Ensure the part is defined in Section 1 first.</p>
+            </div>
+        </div>
+        <button id="saveMappingData" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition duration-300 shadow-md shadow-purple-500/50">
+            Save PCB Slot Mapping
+        </button>
+        
+        <h3 class="text-xl font-semibold text-purple-700 mt-8 mb-4">Existing PCB Mappings</h3>
+        <div id="mapping-list" class="space-y-3">
+            <p class="text-gray-500" id="empty-mapping-list">Loading mappings...</p>
+        </div>
+    </div>
+
+
+    <!-- ---------------------------------------------------- -->
+    <!-- PAGE 3: AUTONOMOUS VERIFICATION (NO MANUAL SELECTION) -->
+    <!-- ---------------------------------------------------- -->
+    <div id="ic-check" class="page bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-green-100">
+        <h2 class="text-2xl font-bold text-green-700 mb-4">3. Autonomous Verification Check</h2>
+        <p class="text-gray-600 mb-6 font-semibold">Upload IC image. System will automatically recognize the Part Number, check if it's approved, and verify its PN/OEM presence.</p>
+
+        
+        <!-- Image Upload -->
+        <div class="mb-6">
+            <label for="icImageFile" class="block text-sm font-medium text-gray-700 mb-1">1. Upload IC Image for Inspection</label>
+            <input type="file" id="icImageFile" accept="image/*" class="w-full text-sm text-gray-500
+                file:mr-4 file:py-2 file:px-4
+                file:rounded-full file:border-0
+                file:text-sm file:font-semibold
+                file:bg-green-50 file:text-green-700
+                hover:file:bg-green-100" required>
+        </div>
+
+        <!-- Image Preview -->
+        <div id="image-preview-container" class="mb-6 hidden">
+            <p class="text-sm font-medium text-gray-700 mb-2">Image Preview:</p>
+            <img id="image-preview" class="w-full h-auto max-h-64 object-contain rounded-lg border border-gray-200 p-2 bg-gray-50" alt="IC Image Preview">
+        </div>
+
+        <!-- Submit Button -->
+        <button id="checkButton" class="w-full flex items-center justify-center bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 transition duration-300 shadow-lg shadow-green-500/50 disabled:bg-gray-400" disabled>
+            <span id="button-text">Analyze, Identify, and Verify IC Marking</span>
+            <svg id="loading-spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </button>
+        
+        <!-- Result Display Section -->
+        <div id="result-card" class="mt-6 p-6 md:p-8 rounded-xl shadow-lg hidden">
+            <h3 class="text-xl font-semibold mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                Verification Result
+            </h3>
+            <div class="space-y-3 text-gray-700">
+                <p><strong class="font-semibold">Detected Part Number:</strong> <span id="detected-pn-display" class="font-bold text-blue-600"></span></p>
+                <p><strong class="font-semibold">Rule Used for Verification:</strong> <span id="expected-rule-display"></span></p>
+                <p><strong class="font-semibold">OCR Read Marking (Full):</strong> <span id="ocr-result" class="font-mono bg-gray-100 px-2 py-1 rounded"></span></p>
+                <p><strong class="font-semibold">VERDICT:</strong> <span id="verdict" class="font-bold text-lg"></span></p>
+                <p><strong class="font-semibold">Reason:</strong> <span id="reason"></span></p>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ---------------------------------------------------- -->
+    <!-- PAGE 4: VERIFIED IC (History/Audit Log) -->
+    <!-- ---------------------------------------------------- -->
+    <div id="verified-ic" class="page bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-yellow-100">
+        <h2 class="text-2xl font-bold text-yellow-700 mb-4">4. Verification History (Shared Audit Log)</h2>
+        <p class="text-gray-600 mb-6 font-bold text-sm">This audit log is shared across all users for quality tracking.</p>
+        <div id="history-list" class="space-y-4">
+            <p class="text-gray-500" id="empty-history">Loading verification history...</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- Firebase SDKs -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, addDoc, onSnapshot, collection, query, serverTimestamp, orderBy, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    setLogLevel('Debug');
+
+    // --- Configuration Variables (UPDATED) ---
+    const EXPLICIT_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyBo9iwVEzUl3ltYubcHxiHAtL_fBWvuIXI",
+        authDomain: "icdec-57696.firebaseapp.com",
+        projectId: "icdec-57696",
+        storageBucket: "icdec-57696.firebasestorage.app",
+        messagingSenderId: "748658042053",
+        appId: "1:748658042053:web:97521a2a43843340d4bcac",
+    };
+    const GEMINI_API_KEY = "AIzaSyDheDDGwx2fL5ltQxlNhtmuRC3Rh5ppZ9s"; 
+
+    // --- Global Variables (Provided by Canvas Environment) ---
+    const appId = typeof __app_id !== 'undefined' ? __app_id : EXPLICIT_FIREBASE_CONFIG.projectId;
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : EXPLICIT_FIREBASE_CONFIG;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    
+    // --- State Variables ---
+    let db;
+    let auth;
+    let userId = null;
+    let isAuthReady = false;
+    
+    // --- DOM Elements ---
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const pages = document.querySelectorAll('.page');
+    const icImageFile = document.getElementById('icImageFile');
+    const checkButton = document.getElementById('checkButton');
+    const imagePreview = document.getElementById('image-preview');
+    const imagePreviewContainer = document.getElementById('image-preview-container');
+    const buttonText = document.getElementById('button-text');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const resultCard = document.getElementById('result-card');
+    const ocrResultSpan = document.getElementById('ocr-result');
+    const verdictSpan = document.getElementById('verdict');
+    const reasonSpan = document.getElementById('reason');
+    const historyList = document.getElementById('history-list');
+    const userIdDisplay = document.getElementById('user-id-display');
+    const expectedRuleDisplay = document.getElementById('expected-rule-display');
+    const detectedPnDisplay = document.getElementById('detected-pn-display');
+
+    const masterPartNumberInput = document.getElementById('masterPartNumber');
+    const masterOEMInput = document.getElementById('masterOEM');
+    const saveMasterDataButton = document.getElementById('saveMasterData');
+    const fullMasterDataView = document.getElementById('full-master-data-view');
+
+    const pcbModelInput = document.getElementById('pcbModel');
+    const icSlotIdInput = document.getElementById('icSlotId');
+    const mappedPartNumberSelect = document.getElementById('mappedPartNumber');
+    const saveMappingDataButton = document.getElementById('saveMappingData');
+    const mappingList = document.getElementById('mapping-list');
+
+
+    // --- Utility Functions ---
+    const showModal = (title, message, isError = true) => {
+        const modal = document.getElementById('custom-modal');
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-message').textContent = message;
+        
+        const titleElement = document.getElementById('modal-title');
+        titleElement.classList.remove('text-red-600', 'text-green-600');
+        titleElement.classList.add(isError ? 'text-red-600' : 'text-green-600');
+        
+        const closeButton = modal.querySelector('button');
+        closeButton.classList.remove('bg-blue-600', 'hover:bg-blue-700', 'bg-red-600', 'hover:bg-red-700');
+        closeButton.classList.add(isError ? 'bg-red-600' : 'bg-blue-600');
+        closeButton.classList.add(isError ? 'hover:bg-red-700' : 'hover:bg-blue-700');
+
+        modal.classList.remove('hidden');
+    };
+
+    const fileToBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
+        });
+    };
+
+    const retryFetch = async (url, options, maxRetries = 5) => {
+        for (let i = 0; i < maxRetries; i++) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    if (response.status === 429 || response.status >= 500) {
+                        throw new Error(`Server error or rate limited: ${response.status}`);
+                    }
+                }
+                return response;
+            } catch (error) {
+                const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
+                if (i < maxRetries - 1) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                } else {
+                    throw error;
+                }
+            }
+        }
+    };
+    
+    const navigateTo = (pageId) => {
+        pages.forEach(page => page.classList.remove('active-page'));
+        document.getElementById(pageId).classList.add('active-page');
+        
+        navButtons.forEach(btn => {
+            btn.classList.remove('bg-blue-600', 'text-white');
+            btn.classList.add('bg-gray-200', 'text-gray-700');
+            if (btn.getAttribute('data-page') === pageId) {
+                btn.classList.add('bg-blue-600', 'text-white');
+                btn.classList.remove('bg-gray-200', 'text-gray-700');
+            }
+        });
+    };
+
+    // --- Firebase Initialization and Authentication ---
+
+    const setupFirebase = async () => {
+        try {
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    isAuthReady = true;
+                    userIdDisplay.textContent = `User ID: ${userId}`;
+                    setupHistoryListener();
+                    setupMasterDataListener(); // PN Rules
+                    setupMappingListener();     // PCB Mappings
+                } else {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error("Error initializing Firebase:", error);
+            userIdDisplay.textContent = 'Firebase Error. Check console.';
+        }
+    };
+
+    // --- AOI Core Verification Logic ---
+
+    const extractPartNumber = (ocrText) => {
+        if (!ocrText) return null;
+        // Tries to find the first sequence of 3 or more alphanumeric characters
+        const matches = ocrText.match(/[A-Z0-9-]{3,}/i);
+        if (matches && matches.length > 0) {
+            return matches[0].toUpperCase().replace(/[^A-Z0-9-]*$/, '').trim();
+        }
+        return null;
+    };
+    
+    const getOCRResultAndPN = async (base64Image) => {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+        
+        const userQuery = `You are a highly accurate Optical Character Recognition (OCR) system. Analyze the provided image of an IC part marking and extract the full text string as accurately as possible. Output ONLY the text read, without any extra commentary or formatting.`;
+
+        const payload = {
+            contents: [
+                {
+                    role: "user",
+                    parts: [
+                        { text: userQuery },
+                        {
+                            inlineData: {
+                                mimeType: "image/jpeg",
+                                data: base64Image
+                            }
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const options = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        };
+
+        try {
+            const response = await retryFetch(apiUrl, options);
+            const result = await response.json();
+            
+            const ocrResult = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+            const detectedPN = extractPartNumber(ocrResult);
+            
+            return { ocrResult, detectedPN };
+
+        } catch (error) {
+            console.error("Initial OCR/PN detection failed:", error);
+            return { ocrResult: "N/A - API Failure", detectedPN: null };
+        }
+    };
+
+    /**
+     * Uses LLM for PN/OEM presence check and quality commentary.
+     */
+    const getVerificationCommentary = async (ocrResult, partData) => {
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
+        
+        const expectedPN = partData.partNumber;
+        const oem = partData.oem;
+
+        const userQuery = `You are a verification specialist providing commentary on IC marking quality for BEL. Analyze the raw OCR text against the Master Rule (PN and OEM).
+        
+        Raw OCR Text: "${ocrResult}"
+        
+        Master Rule:
+        - Main Part Number (PN): Must contain "${expectedPN}".
+        - OEM: Expected manufacturer is "${oem}".
+
+        Provide a single paragraph reason for its quality. The component is considered PASS if the PN and OEM are clearly present and legible. Comment on:
+        1. Whether the expected PN is clearly visible and present.
+        2. Whether the expected OEM logo/initials are visible.
+        3. The overall legibility and quality of the marking.
+        
+        Start your response with 'Commentary: ' followed by your analysis.`;
+
+        const payload = {
+            contents: [{ parts: [{ text: userQuery }] }],
+        };
+
+        const options = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        };
+
+        try {
+            const response = await retryFetch(apiUrl, options);
+            const result = await response.json();
+            
+            let generatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text || "Commentary: LLM failed to provide analysis.";
+            
+            // Clean up the output to be just the reason
+            if (generatedText.startsWith('Commentary: ')) {
+                generatedText = generatedText.substring('Commentary: '.length).trim();
+            }
+
+            return generatedText;
+
+        } catch (error) {
+            console.error("Verification Commentary API call failed:", error);
+            return `Commentary: Critical failure during AI analysis: ${error.message}`;
+        }
+    };
+
+
+    // --- Firestore Path Definitions (PUBLIC) ---
+
+    // Shared Collections for all users
+    const masterDataCollectionPath = () => `/artifacts/${appId}/public/data/ic_master_data`;
+    const mappingCollectionPath = () => `/artifacts/${appId}/public/data/pcb_mappings`;
+    const historyCollectionPath = () => `/artifacts/${appId}/public/data/ic_checks`; // PUBLIC
+
+    // --- Master Data (PN Rules) Logic ---
+
+    const createSamplePartIfEmpty = async (parts) => {
+        if (parts.length === 0 && isAuthReady) {
+            const samplePartNumber = 'NE555P';
+            const docRef = doc(db, masterDataCollectionPath(), samplePartNumber);
+            await setDoc(docRef, {
+                partNumber: samplePartNumber,
+                oem: 'Texas Instruments',
+                // RegEx removed - storing a placeholder for backward compatibility but not used in logic
+                regExPattern: 'PN/OEM Check Only', 
+                timestamp: serverTimestamp(),
+            });
+            console.log("Added sample part NE555P to public data.");
+            
+            const mappingDocRef = doc(db, mappingCollectionPath(), 'DEMO_BOARD_U1');
+            await setDoc(mappingDocRef, {
+                pcbModel: 'DEMO_BOARD_V1',
+                icSlotId: 'U1',
+                mappedPartNumber: samplePartNumber,
+                mappingId: 'DEMO_BOARD_U1',
+                timestamp: serverTimestamp(),
+            });
+            console.log("Added sample mapping DEMO_BOARD_V1/U1 to public data.");
+
+            showModal("Welcome!", "A sample IC rule (NE555P) and a PCB mapping have been added to the **SHARED** dataset. You can now use Page 3 for Autonomous Verification.", false);
+        }
+    }
+
+    const handleSaveMasterData = async () => {
+        if (!isAuthReady) {
+            showModal("Not Ready", "Please wait for Firebase authentication to complete.", true);
+            return;
+        }
+
+        const partNumber = masterPartNumberInput.value.trim().toUpperCase();
+        const oem = masterOEMInput.value.trim();
+        // RegEx input field is now hidden, value is fixed for consistency
+        const regExPattern = 'PN/OEM Check Only'; 
+
+        if (!partNumber || !oem) {
+            showModal("Missing Input", "Please fill in Part Number and OEM.", true);
+            return;
+        }
+        
+        try {
+            const docRef = doc(db, masterDataCollectionPath(), partNumber);
+            await setDoc(docRef, {
+                partNumber,
+                oem,
+                regExPattern, // Save placeholder value
+                timestamp: serverTimestamp(),
+            });
+            
+            showModal("Success!", `${partNumber} rule saved successfully to SHARED Master Data.`, false);
+            masterPartNumberInput.value = '';
+            masterOEMInput.value = '';
+        } catch (error) {
+            console.error("Error saving master data:", error);
+            showModal("Save Failed", `Could not save rule: ${error.message}`, true);
+        }
+    };
+
+    const setupMasterDataListener = () => {
+        if (!db) return;
+
+        const q = query(
+            collection(db, masterDataCollectionPath()),
+            orderBy('partNumber', 'asc')
+        );
+
+        onSnapshot(q, async (snapshot) => {
+            let currentMasterParts = [];
+            snapshot.forEach(doc => {
+                currentMasterParts.push({ id: doc.id, ...doc.data() });
+            });
+            
+            await createSamplePartIfEmpty(currentMasterParts);
+
+            renderFullMasterDataView(currentMasterParts);
+            populateMappedPartNumberSelect(currentMasterParts);
+        }, (error) => {
+            console.error("Error listening to master data:", error);
+        });
+    };
+
+    const renderFullMasterDataView = (parts) => {
+        fullMasterDataView.innerHTML = '';
+        if (parts.length === 0) {
+            fullMasterDataView.innerHTML = '<p class="text-gray-500 col-span-full" id="empty-master-data-view">No approved parts found. Please add a rule above.</p>';
+            return;
+        }
+
+        parts.forEach(part => {
+            const item = document.createElement('div');
+            item.className = 'bg-blue-50 p-4 rounded-xl shadow-sm border border-blue-200';
+            item.innerHTML = `
+                <strong class="text-lg text-blue-700 block">${part.partNumber}</strong>
+                <p class="text-sm text-gray-700 mt-1">OEM: ${part.oem}</p>
+            `;
+            fullMasterDataView.appendChild(item);
+        });
+    };
+
+    const populateMappedPartNumberSelect = (parts) => {
+        mappedPartNumberSelect.innerHTML = '<option value="">-- Select Approved PN --</option>';
+        parts.forEach(part => {
+            const option = document.createElement('option');
+            option.value = part.partNumber;
+            option.textContent = `${part.partNumber} (${part.oem})`;
+            mappedPartNumberSelect.appendChild(option);
+        });
+    };
+
+
+    // --- PCB Mapping Logic (Omitted for brevity) ---
+    const handleSaveMappingData = async () => {
+        if (!isAuthReady) {
+            showModal("Not Ready", "Please wait for Firebase authentication to complete.", true);
+            return;
+        }
+
+        const pcbModel = pcbModelInput.value.trim().toUpperCase();
+        const icSlotId = icSlotIdInput.value.trim().toUpperCase();
+        const mappedPN = mappedPartNumberSelect.value;
+
+        if (!pcbModel || !icSlotId || !mappedPN) {
+            showModal("Missing Input", "Please fill in PCB Model, Slot ID, and select a Part Number.", true);
+            return;
+        }
+        
+        const mappingId = `${pcbModel}_${icSlotId}`;
+
+        try {
+            const docRef = doc(db, mappingCollectionPath(), mappingId);
+            await setDoc(docRef, {
+                pcbModel,
+                icSlotId,
+                mappedPartNumber: mappedPN,
+                mappingId,
+                timestamp: serverTimestamp(),
+            });
+            
+            showModal("Success!", `Mapping ${pcbModel}/${icSlotId} saved successfully to SHARED Mappings.`, false);
+            pcbModelInput.value = '';
+            icSlotIdInput.value = '';
+            mappedPartNumberSelect.value = ''; 
+        } catch (error) {
+            console.error("Error saving mapping data:", error);
+            showModal("Save Failed", `Could not save mapping: ${error.message}`, true);
+        }
+    };
+
+    const setupMappingListener = () => {
+        if (!db) return;
+
+        const q = query(
+            collection(db, mappingCollectionPath()),
+            orderBy('pcbModel', 'asc')
+        );
+
+        onSnapshot(q, (snapshot) => {
+            const mappings = [];
+            snapshot.forEach(doc => {
+                mappings.push({ id: doc.id, ...doc.data() });
+            });
+            renderMappingList(mappings);
+        }, (error) => {
+            console.error("Error listening to mapping data:", error);
+        });
+    };
+
+    const renderMappingList = (mappings) => {
+        mappingList.innerHTML = '';
+        if (mappings.length === 0) {
+            mappingList.innerHTML = '<p class="text-gray-500" id="empty-mapping-list">No PCB Slot Mappings defined yet. Add one above.</p>';
+            return;
+        }
+
+        mappings.forEach(map => {
+            const item = document.createElement('div');
+            item.className = 'p-3 bg-purple-50 rounded-lg border border-purple-200 shadow-sm';
+            item.innerHTML = `
+                <strong class="text-purple-700">${map.pcbModel} / ${map.icSlotId}</strong> 
+                <span class="text-sm text-gray-700"> &rarr; PN: <strong>${map.mappedPartNumber}</strong></span>
+            `;
+            mappingList.appendChild(item);
+        });
+    };
+    
+    // --- Data Storage and History Listener (PUBLIC) ---
+
+    const saveCheckResult = async (data) => {
+        if (!isAuthReady) {
+            console.error("Firestore not ready. Cannot save data.");
+            return;
+        }
+        // Saving history to PUBLIC path
+        const collectionPath = historyCollectionPath();
+        
+        try {
+            await addDoc(collection(db, collectionPath), {
+                ...data,
+                timestamp: serverTimestamp(),
+                checkedByUserId: userId 
+            });
+            console.log("Check result saved to public Firestore history.");
+        } catch (error) {
+            console.error("Error saving document:", error);
+        }
+    };
+
+    const setupHistoryListener = () => {
+        if (!db) return;
+
+        // Listening to PUBLIC path
+        const collectionPath = historyCollectionPath();
+        const q = query(
+            collection(db, collectionPath),
+            orderBy('timestamp', 'desc')
+        );
+
+        onSnapshot(q, (snapshot) => {
+            const checks = [];
+            snapshot.forEach(doc => {
+                checks.push({ id: doc.id, ...doc.data() });
+            });
+            renderHistory(checks);
+        }, (error) => {
+            console.error("Error listening to history:", error);
+        });
+    };
+
+    const renderHistory = (checks) => {
+        historyList.innerHTML = ''; 
+        const emptyHistory = document.createElement('p');
+        emptyHistory.className = 'text-gray-500';
+        emptyHistory.textContent = 'No checks performed yet. Start a new verification!';
+
+        if (checks.length === 0) {
+            historyList.appendChild(emptyHistory);
+            return;
+        }
+
+        checks.forEach(check => {
+            // Simplified check based on new verification logic (PN Found in DB)
+            const isGenuine = check.verdict.toUpperCase().includes('GENUINE') || check.verdict.toUpperCase().includes('PASS');
+            const colorClass = isGenuine ? 'bg-green-100 border-green-400' : 'bg-red-100 border-red-400';
+            const statusIcon = isGenuine ? '✅ PASS' : '❌ FAIL';
+            const time = check.timestamp ? new Date(check.timestamp.toDate()).toLocaleString() : 'Saving...';
+            const checkerId = check.checkedByUserId || 'Unknown User';
+
+            const item = document.createElement('div');
+            item.className = `p-4 rounded-xl border-2 shadow-sm ${colorClass}`;
+            item.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <p class="font-bold text-lg flex items-center ${isGenuine ? 'text-green-800' : 'text-red-800'}">
+                        ${statusIcon}
+                    </p>
+                    <div class="text-right">
+                        <span class="text-xs font-mono text-gray-500 block">${time}</span>
+                        <span class="text-xs text-gray-700 font-semibold block">User: ${checkerId}</span>
+                    </div>
+                </div>
+                <p class="text-sm"><strong>Detected PN:</strong> <span class="text-blue-600">${check.detectedPN || 'N/A'}</span></p>
+                <p class="text-sm"><strong>Expected PN/OEM Rule:</strong> ${check.partData ? check.partData.partNumber + ' (' + check.partData.oem + ')' : 'N/A (Unapproved)'}</p>
+                <p class="text-sm"><strong>OCR Read:</strong> <span class="font-mono text-gray-900 break-words">${check.ocrResult}</span></p>
+                <p class="text-sm mt-1"><strong>Reason/Commentary:</strong> ${check.reason || 'N/A'}</p>
+            `;
+            historyList.appendChild(item);
+        });
+    };
+
+    // --- Event Handlers ---
+
+    const handleFileChange = () => {
+        const file = icImageFile.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreview.src = e.target.result;
+                imagePreviewContainer.classList.remove('hidden');
+                checkButton.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        } else {
+            imagePreviewContainer.classList.add('hidden');
+            checkButton.disabled = true;
+        }
+    };
+    
+    const handleCheckClick = async () => {
+        const file = icImageFile.files[0];
+
+        if (!file) {
+            showModal("Image Missing", "Please select an IC image to start verification.", true);
+            return;
+        }
+
+        checkButton.disabled = true;
+        loadingSpinner.classList.remove('hidden');
+        buttonText.textContent = '1/3. Reading Part Marking (OCR)...';
+        resultCard.classList.add('hidden');
+
+        let partData = null;
+        let ocrResult = "N/A";
+        let detectedPN = null;
+        let verdict = "FAIL";
+        let reason = "Verification failed due to system error.";
+        let llmCommentary = "AI commentary failed.";
+
+        try {
+            const base64Image = await fileToBase64(file);
+            
+            // 1. Get OCR Result and Detect PN
+            const ocr_pn_result = await getOCRResultAndPN(base64Image);
+            ocrResult = ocr_pn_result.ocrResult;
+            detectedPN = ocr_pn_result.detectedPN;
+            
+            buttonText.textContent = `2/3. Looking up "${detectedPN || 'N/A'}" in Master Data...`;
+
+            if (!detectedPN) {
+                verdict = "FAIL";
+                reason = "Could not identify a clear Part Number from the IC marking. Check image quality or marking legibility.";
+            } else {
+                // 2. Lookup Rule in Shared Master Data
+                const pnDocRef = doc(db, masterDataCollectionPath(), detectedPN);
+                const pnDocSnap = await getDoc(pnDocRef);
+
+                if (pnDocSnap.exists()) {
+                    partData = pnDocSnap.data();
+                    
+                    // --- STEP 3: Get AI Commentary (LLM) for PN/OEM presence and quality ---
+                    buttonText.textContent = `3/3. Confirming PN/OEM Presence and Quality...`;
+                    llmCommentary = await getVerificationCommentary(ocrResult, partData);
+
+                    // --- STEP 4: Final Verdict Logic (Based on Master Data Existence) ---
+                    // Since Lot Code check is removed, finding the PN in the approved list is the main PASS condition.
+                    // The LLM commentary provides the context/reasoning.
+                    if (ocrResult.includes(partData.partNumber) || ocrResult.includes(partData.oem)) {
+                         verdict = "GENUINE (PASS)";
+                         reason = `Approved Part Number was found in Master Data. Verification Commentary: ${llmCommentary}`;
+                    } else {
+                        verdict = "FAKE/SUSPICIOUS (FAIL)";
+                        reason = `CRITICAL FAILURE: Part Number or OEM not clearly detected in the OCR text, despite being in the Master Data. Quality Commentary: ${llmCommentary}`;
+                    }
+
+                    
+                } else {
+                    verdict = "FAKE/SUSPICIOUS";
+                    reason = `Part Number "${detectedPN}" is not found in the BEL Approved Master IC Rules Dataset. This component is unauthorized.`;
+                }
+            }
+
+        } catch (error) {
+            console.error("Autonomous Verification failed:", error);
+            verdict = 'SYSTEM_FAIL';
+            reason = `Critical failure during verification process: ${error.message}`;
+        } finally {
+            
+            // --- Update UI with Result ---
+            detectedPnDisplay.textContent = detectedPN || 'N/A';
+            ocrResultSpan.textContent = ocrResult;
+            verdictSpan.textContent = verdict.toUpperCase();
+            reasonSpan.textContent = reason;
+            expectedRuleDisplay.textContent = partData ? `${partData.partNumber} (${partData.oem})` : 'N/A (Unapproved or Failed Lookup)';
+
+            const isGenuine = verdict.toUpperCase().includes('GENUINE') || verdict.toUpperCase().includes('PASS');
+            resultCard.className = `mt-6 p-6 md:p-8 rounded-xl shadow-lg border-2 ${isGenuine ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'}`;
+            verdictSpan.classList.toggle('text-green-600', isGenuine);
+            verdictSpan.classList.toggle('text-red-600', !isGenuine);
+
+            resultCard.classList.remove('hidden');
+
+            // --- Save to History ---
+            saveCheckResult({
+                detectedPN: detectedPN,
+                partData: partData ? { partNumber: partData.partNumber, oem: partData.oem } : null,
+                ocrResult: ocrResult,
+                verdict: verdict,
+                reason: reason,
+            });
+
+            // --- Stop Loading State ---
+            checkButton.disabled = false;
+            loadingSpinner.classList.add('hidden');
+            buttonText.textContent = 'Analyze, Identify, and Verify IC Marking';
+        }
+    };
+
+
+    // --- Setup on Load ---
+    window.onload = () => {
+        setupFirebase();
+        
+        navigateTo('ic-rules'); 
+
+        icImageFile.addEventListener('change', handleFileChange);
+        checkButton.addEventListener('click', handleCheckClick);
+        saveMasterDataButton.addEventListener('click', handleSaveMasterData);
+        saveMappingDataButton.addEventListener('click', handleSaveMappingData);
+
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => navigateTo(button.getAttribute('data-page')));
+        });
+    };
+
+</script>
+</body>
+</html>
+
